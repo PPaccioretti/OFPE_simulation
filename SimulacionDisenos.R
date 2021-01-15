@@ -8,7 +8,6 @@ RFoptions(seed = NA)
 args <- commandArgs(TRUE)
 
 semilla <- 1990
-
 if (length(args) >= 1) {
   semilla <- as.numeric(args[[1]])
 }
@@ -66,7 +65,7 @@ GenerarCampoAjustarModelos <- function(#Dimensiones Campo
   
   #Dimensiones Parcela
   xlargoparcela = 70, #metros
-  yanchoparcela = 30, #metros
+  yanchoparcela = 33, #metros
   
   # Parámetros error correlacionado Exponencial
   # Recopilación de 247 mapas de rendimiento de maíz: 
@@ -75,29 +74,34 @@ GenerarCampoAjustarModelos <- function(#Dimensiones Campo
   sill = 7, #Sill = Var de Exp
   nugget = 1.2, #varianza nugget ~Weibull()
   
-  MediaCultivo = 8,     
+  MediaCultivo = 80,#qq#8,     
   
   #########
   #Número de zonas (Divide al eje X)
   Nzonas = 2,
   
   #HeterogeneidadEntreZonas (Heterog *(Sill+Nugget) )
-  Heterog = 3,
+  Heterog = 2,
   
   #Tratamientos
-  Trat = c(0, 40, 70, 100, 140),
+  Trat = c(1, 40, 70, 100, 140),
   
   #Betas de regresion
-  mediaBeta1 = 12.76,
-  varBeta1 = 0.001,
-  mediaBeta2 = -0.001,
-  varBeta2 = 0.0000001,
+  mediaBeta1 = 0.244,#qq #12.76/100,
+  varBeta1 = 0,#0.000001,#0.001,
+  mediaBeta2 = -0.0015,#qq #-0.001,
+  varBeta2 = 0,#0.0000001,
   covBetas = 0,
-  TerInterZonError = 0.034) {
-
+  TerInterZonError = 0.0034) {
+  if (Sys.info()['sysname'] == "Windows") {
+    browser()
+  }
+# 
   #Futuras coordenadas del campo
-  x <- seq(0, xcampo, xcampo / xlargoparcela)
-  y <- seq(0, ycampo, ycampo / yanchoparcela)
+  # x <- seq(0, xcampo, xcampo / xlargoparcela)
+  # y <- seq(0, ycampo, ycampo / yanchoparcela)
+  x <- seq(0, xcampo, xlargoparcela)
+  y <- seq(0, ycampo, yanchoparcela)
   #Fija una semilla para la simulación
   MiSemilla = round(runif(1, min = -99999, max = 99999), 0)
 
@@ -116,7 +120,7 @@ GenerarCampoAjustarModelos <- function(#Dimensiones Campo
   EfZona <-
     findInterval(Simulacion$x, seq(0, xcampo, length = Nzonas + 1)[-c(1, Nzonas +
                                                                         1)],
-                 left.open = TRUE) * (Heterog * (sill + nugget))
+                 left.open = TRUE) * (Heterog * sqrt(sill + nugget))
   #   Cantidad de parcelas por zona: table(as.factor(EfZona))
   
   #Junta la simulacion con la zona
@@ -173,7 +177,7 @@ GenerarCampoAjustarModelos <- function(#Dimensiones Campo
   # Asigna un tratamiento a cada coordenada y.
   # Aleatoriza los tratamientos y todas las franjas tienen el mismo orden de Tratamiento
   # o aleatoriza todas las franjas sin restricción
-  AsigTrat <- if (AleatFranja) {
+  if (AleatFranja) {
     AleatTrat <-
       do.call(rbind,
               sapply(1:ceiling(length(unique(MisParcelasFR$y)) / length(Trat)),
@@ -188,9 +192,10 @@ GenerarCampoAjustarModelos <- function(#Dimensiones Campo
       Trat[AleatTrat$AsigTrat[1:length(unique(MisParcelasFR$y))]]
     AleatTrat <- AleatTrat[1:length(TratAsigFr), ]
     AleatTrat$AsigTrat <- TratAsigFr
-    AleatTrat
+    AsigTrat <- AleatTrat
   } else {
-    rep(Trat[sample(1:length(Trat))], length =
+    AsigTrat <- 
+      rep(Trat[sample(1:length(Trat))], length =
           length(unique(MisParcelasFR$y)))
   }
   #Junta las coordenadas y con el orden de los tratamientos
@@ -234,7 +239,7 @@ GenerarCampoAjustarModelos <- function(#Dimensiones Campo
         by = min(diff(unique(MisParcelasDBCA$y))) * length(Trat)
       ),
       left.open = FALSE,
-      rightmost.closed = TRUE
+      rightmost.closed = FALSE
     )
   #Genera los bloques individuales que es la combinación de la división anterior
   MisParcelasBloq <-
@@ -260,7 +265,7 @@ GenerarCampoAjustarModelos <- function(#Dimensiones Campo
       MisParcelasBloqComp,
       MisParcelasBloqComp$Bloque,
       FUN = function(x) {
-        data.frame(x, "AsigTrat" = Trat[sample(1:length(Trat))])
+         data.frame(x, "AsigTrat" = Trat[sample(1:length(Trat))])
       },
       simplify = FALSE
     )
@@ -756,8 +761,9 @@ GenerarCampoAjustarModelos <- function(#Dimensiones Campo
     BetasEstReal[order(BetasEstReal$Orden), c(3, 1, 4, 2, 5:(ncol(BetasEstReal) -
                                                                1))] 
   setTxtProgressBar(pb, 26)
+  close(pb)
   cat('\n')
-  # close(pb)
+
   return(list(
     "Resumen" = ResumenResult,
     "BetasEstReal" = BetasEstReal,
@@ -781,7 +787,7 @@ GenerarCampoAjustarModelos <- function(#Dimensiones Campo
 # set.seed(1)
 
 simulaciones <- mclapply(1:nsim, function(i) {
-  
+  RFoptions(storing = FALSE)
   # Con 0 en los trat
   ## Alta variacion Tratamientos
   ### baja correlacion espacial "<0.25"
@@ -839,7 +845,7 @@ simulaciones <- mclapply(1:nsim, function(i) {
                                rango = 56.82,
                                sill = 4.81,
                                nugget = 2.54)
-  RFoptions(storing = FALSE)
+
   
   info_Test_AltaVarT_BajaCorr <- data.frame(
     'Simulacion' = i,
@@ -1021,4 +1027,4 @@ saveRDS(simulaciones,
                "nsim_",
                nsim,
                "_",
-               format(Sys.time(), "%Y_%d_%m_%H%M"), ".rds"))
+               format(Sys.time(), "%Y_%d_%m_%H-%M-%S"), ".rds"))

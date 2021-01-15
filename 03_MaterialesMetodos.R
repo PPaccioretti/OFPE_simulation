@@ -4,8 +4,8 @@ library(ggplot2)
 library(ggpubr)
 library(stars)
 source("src/simular.R")
-RFoptions(seed = 11)
-mediaCampo <- 10
+RFoptions(seed = 38)
+mediaCampo <- 8
 
 
 # rsv <- function(sill, nugget) {
@@ -46,13 +46,17 @@ mediaCampo <- 10
 simuAltoEsp <- simular(rango = 47.11,
                 sill = 7.85,
                 nugget = 0.94,
-                media = mediaCampo )
+                media = mediaCampo,
+                xlargoparcela = 10,
+                yanchoparcela = 10)
 
 ### Media RSV ----
 simuMedioEsp <- simular(rango = 56.82,
                         sill = 4.81,
-                        nugget = 2.54,
-                        media = mediaCampo )
+                        nugget = 2.54,#*2,
+                        media = mediaCampo,
+                        xlargoparcela = 10,
+                        yanchoparcela = 10)
 
 ### Maxima espacialidad ----
 # simuMaxEsp <- simular(rango = 45.48,
@@ -74,15 +78,16 @@ ggplot_medio <- ggplot_simulacion(simuMedioEsp)
 figura <-
   ggarrange(
     # ggplot_minimo,
-    ggplot_bajo,
     ggplot_medio,
+    ggplot_bajo,
     # ggplot_maximo,
-    ncol = 2,
-    nrow = 1,
+    ncol = 2,#1,
+    nrow = 1,#2,
     labels = "auto",
     common.legend = TRUE,
     legend = 'bottom'
   )
+figura
 
 ggsave('images/SpatialCorrExample.png', figura,
        width = 15,
@@ -99,7 +104,7 @@ Simulacion <-
 EfZona <-
   findInterval(Simulacion$x, seq(0, xcampo, length = Nzonas + 1)[-c(1, Nzonas +
                                                                       1)],
-               left.open = TRUE) * (Heterog * (sill + nugget))
+               left.open = TRUE) * (Heterog * sqrt(sill + nugget))
 #   Cantidad de parcelas por zona: table(as.factor(EfZona))
 
 #Junta la simulacion con la zona

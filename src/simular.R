@@ -5,17 +5,19 @@ simular <- function(sill,
                     media,
                     xcampo = 1000,
                     ycampo = 1000,
-                    xlargoparcela = 70,
-                    yanchoparcela = 30) {
-  x <- seq(0, xcampo, xcampo / xlargoparcela)
-  y <- seq(0, ycampo, ycampo / yanchoparcela)
+                    xlargoparcela = 33,
+                    yanchoparcela = 70) {
+  # x <- seq(0, xcampo, xcampo / xlargoparcela)
+  # y <- seq(0, ycampo, ycampo / yanchoparcela)
+  
+  x <- seq(0, xcampo, xlargoparcela)
+  y <- seq(0, ycampo, yanchoparcela)
   
   modelo <-
     RMexp(var = sill, scale = rango) +
     RMnugget(var = nugget) +
     RMtrend(mean = media)
   simu <- RFsimulate(modelo, x, y,  spConform = TRUE)
-  
   
   simu <- stars::st_rasterize(sf::st_as_sf(simu), 
                               nx = length(x),

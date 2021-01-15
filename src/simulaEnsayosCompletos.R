@@ -2,23 +2,25 @@ graficarEnsayo <- function(sill,
                            rango,
                            nugget,
                            media,
-                           xcampo = 1000,
-                           ycampo = 1000,
+                           xcampo = 980,
+                           ycampo = 900,
                            xlargoparcela = 70,
                            yanchoparcela = 30,
                            Nzonas = 2,
-                           Heterog = 3,
-                           Trat = c(0, 40, 70, 100, 140),
+                           Heterog = 2,
+                           Trat = c(1, 40, 70, 100, 140),
                            mediaBeta1 = 12.76,
                            varBeta1 = 0.001,
                            mediaBeta2 = -0.001,
                            varBeta2 = 0.0000001,
                            covBetas = 0) {
   
-  # browser() 
   library(RandomFields)
-  x <- seq(0, xcampo, xcampo / xlargoparcela)
-  y <- seq(0, ycampo, ycampo / yanchoparcela)
+  # x <- seq(0, xcampo, xcampo / xlargoparcela)
+  # y <- seq(0, ycampo, ycampo / yanchoparcela)
+
+  x <- seq(0, xcampo, xlargoparcela)
+  y <- seq(0, ycampo, yanchoparcela)
   
   modelo <-
     RMexp(var = sill, scale = rango) +
@@ -51,9 +53,12 @@ graficarEnsayo <- function(sill,
   AleatFranja <- TRUE
   Dis <-
     as.factor(findInterval(Simulacion$y, seq(0, ycampo, length = NDis + 1)[-c(1, NDis +
-                                                                                1)],  left.open = TRUE))
+                                                                        1)],  left.open = TRUE))
   #   Cantidad de parcelas por Disnios:  table(Dis)
   #                                      table(Dis, EfZona)
+  cat('Hay', table(Dis), 'parcelas para cada disenio\n')     
+  
+  
   #Asigna **ALEATORIAMENTE** a cada intervalo un diseño
   levels(Dis) <-
     NombresDis[sample(1:NDis)] #[c(2, 3, 1)] 
@@ -117,6 +122,8 @@ graficarEnsayo <- function(sill,
   #Selecciona las parcelas a las que le tocó DBCA
   MisParcelasDBCA <- Simulacion[Simulacion$Disenio == "DBCA", ]
   #Genera la división de bloques en el eje X y el Eje Y
+  # browser()
+  
   FranX <-
     findInterval(
       MisParcelasDBCA$x,
@@ -125,11 +132,12 @@ graficarEnsayo <- function(sill,
         max(MisParcelasDBCA$x),
         length = length(unique(MisParcelasDBCA$x))
       ),
-      left.open = FALSE,
+      left.open = TRUE,
       rightmost.closed = FALSE
     )
   # FranY<-findInterval(MisParcelasDBCA$y, seq(min(MisParcelasDBCA$y),max(MisParcelasDBCA$y),
   #                                            length=ceiling(length(unique(MisParcelasDBCA$y))/length(Trat))),  left.open = TRUE, rightmost.closed=FALSE)
+  
   FranY <-
     findInterval(
       MisParcelasDBCA$y,
@@ -138,8 +146,8 @@ graficarEnsayo <- function(sill,
         max(MisParcelasDBCA$y),
         by = min(diff(unique(MisParcelasDBCA$y))) * length(Trat)
       ),
-      left.open = FALSE,
-      rightmost.closed = TRUE
+      left.open = TRUE,
+      rightmost.closed = FALSE
     )
   #Genera los bloques individuales que es la combinación de la división anterior
   MisParcelasBloq <-
@@ -263,16 +271,20 @@ graficarEnsayo <- function(sill,
   
 }
 
-a <- graficarEnsayo(rango = 38.78,
-               sill = 9.69,
-               nugget = 0.06,
-               media = 80)
-b <- graficarEnsayo(rango = 38.78,
-                  sill = 9.69,
-                  nugget = 0.06,
-                  media = 80)
+a <- graficarEnsayo(
+  rango = 38.78,
+  sill = 9.69,
+  nugget = 0.06,
+  media = 80
+)
+b <- graficarEnsayo(
+  rango = 38.78,
+  sill = 9.69,
+  nugget = 0.06,
+  media = 80
+)
 image(a)
-identical(a,b)
+identical(a, b)
 # plot(MisParcelasFRTrat$AsigTrat+1, t(MisParcelasFRTrat$MiRto), col='blue')
 # points(MisParcelasDCATrat$AsigTrat+2, t(MisParcelasDCATrat$MiRto), col='red')
 # points(MisParcelasDBCATrat$AsigTrat+3, t(MisParcelasDBCATrat$MiRto), col='darkgreen')

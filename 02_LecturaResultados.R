@@ -14,23 +14,56 @@ selecciona <- function(datos, nombre) {
   })
   do.call(rbind, misListas)
 }
+# Objetos con modelos de interes ----
+modelos_sin_zona <-
+  c("M.DBCA.BlA.Co", "M.DCA.Co", "M.FR.FrA.Co")
+
+modelos_zona <-
+  c("M.DBCA.Zo.BlA.Co", "M.DCA.Zo.Co", "M.FR.Zo.FrA.Co")
+
+modelos_zona_Corr_NoCorr <-
+  c("M.DBCA.Zo.BlA.Co", "M.DCA.Zo.Co", "M.FR.Zo.FrA.Co",
+    "M.DBCA.Zo.BlA", "M.DCA.Zo", "M.FR.Zo.FrA")
+
+modelos_sin_zona_Corr_NoCorr <-
+  c("M.DBCA.BlA.Co", "M.DCA.Co", "M.FR.FrA.Co",
+    "M.DBCA.BlA", "M.DCA", "M.FR.FrA")
 
 # Lectura datos ----
 # patronResultados <- '_2020_(10)_12_*'
-patronResultados <- '_2020_(15)_12_*'
+# patronResultados <- '_2020_(15)_12_*'
+# patronResultados <- '(_2020_(17)_12_(19|20))'
+# patronResultados <- '(_2020_(18)_12_)'
+patronResultados <- '(_2021_(14)_01_)'
 misRDS <-
   list.files('resultados/', pattern = patronResultados, full.names = TRUE)
-
+misRDS
 
 misObjetos  <- lapply(misRDS, function(x) {
   miRDS <- tryCatch(readRDS(x), error = function(e) {return(NULL)})
-  if (is.null(miRDS)) 
+  if (is.null(miRDS)) {
+    cat(x, 'es NULL')
     return(NULL)
-  miRDS <- miRDS[unlist(lapply(miRDS, no_null_or_error))]
+  }
+
+  miSplit <- strsplit(x, "_")[[1]]
+  miCorrida <- miSplit[which(miSplit == "Sem") + 1]
+  
+  nullError <- unlist(lapply(miRDS, no_null_or_error))
+  cat('Se Eliminaron',
+      formatC(sum(!nullError), 2),
+      'simulaciones por ser errores o null.\n')
+  miRDS <- miRDS[nullError]
   
   resumen <- selecciona(miRDS, 'Resumen')
   betas <- selecciona(miRDS, 'BetasEstReal')
-  semillas <- selecciona(miRDS, 'semillas')
+  semillas <- selecciona(miRDS, 'Semilla')
+  
+  betas$Coeficientes <- as.factor(as.character(betas$Coeficientes))
+  
+  resumen$Corrida <- as.numeric(miCorrida)
+  betas$Corrida <- as.numeric(miCorrida)
+  semillas$Corrida <- as.numeric(miCorrida)
   
   list(Resumen = resumen,
        BetasEstReal = betas,
@@ -42,6 +75,23 @@ misObjetos  <- lapply(misRDS, function(x) {
 resumen <- selecciona(misObjetos, 'Resumen')
 betas <- selecciona(misObjetos, 'BetasEstReal')
 semillas <- selecciona(misObjetos, 'semillas')
+
+sigmaalto <- resumen[resumen$Sigma_CV > 15, c('Corrida', 'Simulacion')]
+resumen <- resumen[ !(resumen$Corrida %in% sigmaalto$Corrida & 
+                        resumen$Simulacion %in% sigmaalto$Simulacion), ]
+
+betas <- betas[ !(betas$Corrida %in% sigmaalto$Corrida & 
+                    betas$Simulacion %in% sigmaalto$Simulacion), ]
+
+semillas <- semillas[ !(semillas$Corrida %in% sigmaalto$Corrida & 
+                          semillas$Simulacion %in% sigmaalto$Simulacion), ]
+
+
+
+
+# table(sigmaalto$Modelo)
+# resumen <- resumen[resumen$Corrida != 50 & resumen$Simulacion != 44, ]
+# betas <- betas[betas$Corrida != 50 & betas$Simulacion != 44, ]
 
 # Cantidad de simulaciones total
 sum(selecciona(misObjetos, 'Simulaciones'))
@@ -55,8 +105,6 @@ resumen$Disenio[grepl('M[.]FR[.]*', resumen$Modelo)] <- 'Franjas'
 
 # Error estandar residual ----
 ## Sin contemplar efecto zona ----
-modelos_sin_zona <-
-  c("M.DBCA.BlA.Co", "M.DCA.Co", "M.FR.FrA.Co")
 
 resumen_modelos_sin_zona <- resumen %>%
   filter(Modelo %in% modelos_sin_zona)
@@ -64,7 +112,7 @@ resumen_modelos_sin_zona <- resumen %>%
 ecdf_error_SinZona <- 
   ggplot_ecdf(resumen_modelos_sin_zona) +
   facet_grid(Dosis0 ~ TratMax,
-             labeller = label_dosisTrat)
+             labeller = label_dosisTrat) 
 
 ggsave('images/ecdf_error_SinZona.png',
        ecdf_error_SinZona,
@@ -109,9 +157,6 @@ ggsave('images/ecdf_error_SinZona.png',
 
 
 ## Contemplando efecto zona ----
-
-modelos_zona <-
-  c("M.DBCA.Zo.BlA.Co", "M.DCA.Zo.Co", "M.FR.Zo.FrA.Co")
 
 resumen_modelos_zona <- resumen %>%
   filter(Modelo %in% modelos_zona)
@@ -169,16 +214,14 @@ ggsave('images/ecdf_error_Zona.png',
 # Media del sigma del error para los disenios particionado por 
 # Correlacion espacial y por si se tuvo en cuenta la espacialidad de los datos
 # o no
-modelos_interes <-
-  c("M.DBCA.Zo.BlA.Co", "M.DCA.Zo.Co", "M.FR.Zo.FrA.Co",
-    "M.DBCA.Zo.BlA", "M.DCA.Zo", "M.FR.Zo.FrA")
 
-resumen_modelos_interes <- resumen %>%
-  filter(Modelo %in% modelos_interes)
-# datos <- resumen_modelos_interes
 
-descriptiva_modelos_interes <-
-  resumen_modelos_interes %>%
+resumen_modelos_zona_Corr_NoCorr <- resumen %>%
+  filter(Modelo %in% modelos_zona_Corr_NoCorr)
+# datos <- resumen_modelos_zona_Corr_NoCorr
+
+descriptiva_modelos_zona_Corr_NoCorr <-
+  resumen_modelos_zona_Corr_NoCorr %>%
   group_by(Disenio, CorrEsp, ConCorr) %>%
   summarise(
     media = mean(Sigma_CV, na.rm = TRUE),
@@ -188,7 +231,7 @@ descriptiva_modelos_interes <-
   )
 
 descriptiva_corrEsp <-
-  ggplot(descriptiva_modelos_interes,
+  ggplot(descriptiva_modelos_zona_Corr_NoCorr,
          aes(x = Disenio, color = ConCorr)) +
   # geom_errorbar(aes(ymin = media - ee,
   #                   ymax = media + ee),
@@ -228,16 +271,80 @@ ggsave(
 )
 
 # Sesgo y Cobertura ----
-betas$ValoresReales[betas$Coeficientes %in% '(Intercept)'] <- 8
-betas$ValoresReales[betas$Coeficientes %in% 'as.factor(Zona)26.37'] <-
-  26.37
-betas$ValoresReales[betas$Coeficientes %in% 'as.factor(Zona)22.05'] <-
-  22.05
-betas$ValoresReales[betas$Coeficientes %in% 'AsigTrat:as.factor(Zona)26.37'] <-
-  26.37 * 0.034
-betas$ValoresReales[betas$Coeficientes %in% 'AsigTrat:as.factor(Zona)22.05'] <-
-  22.05 * 0.034
+misZonas <- gsub('(as\\.factor)|([aA-zZ]+)|(\\(.*\\)|:|)',
+                 '',
+                 unique(betas$Coeficientes),
+                 perl = TRUE)
 
+betas$ValoresReales[betas$Coeficientes %in% '(Intercept)'] <- 80
+betas$ValoresReales[betas$Coeficientes %in% 'as.factor(Zona)5.92958683214944'] <-
+  5.92958683214944
+betas$ValoresReales[betas$Coeficientes %in% 'as.factor(Zona)5.42217668469038'] <-
+  5.42217668469038
+betas$ValoresReales[betas$Coeficientes %in% 'AsigTrat:as.factor(Zona)5.92958683214944'] <-
+  5.92958683214944 * 0.034
+betas$ValoresReales[betas$Coeficientes %in% 'AsigTrat:as.factor(Zona)5.42217668469038'] <-
+  5.42217668469038 * 0.034
+
+
+
+betas$ModeloLab <-
+  factor(
+    betas$Modelo,
+    levels = c(
+      'M.DBCA.BlA.Co',
+      'M.DBCA.Zo.BlA.Co',
+      'M.DCA.Co',
+      'M.DCA.Zo.Co',
+      'M.FR.FrA.Co',
+      'M.FR.Zo.FrA.Co',
+      'M.DBCA.BlA',
+      'M.DBCA.Zo.BlA',
+      'M.DCA',
+      'M.DCA.Zo',
+      'M.FR.FrA',
+      'M.FR.Zo.FrA'
+    ),
+    labels = c(
+      'DBCA',
+      'DBCA + Zona',
+      'DCA',
+      'DCA + Zona',
+      'Franjas',
+      'Franjas + Zona',
+      'DBCA sin Correlacion',
+      'DBCA + Zona sin Correlacion',
+      'DCA sin Correlacion',
+      'DCA + Zona sin Correlacion',
+      'Franjas sin Correlacion',
+      'Franjas + Zona sin Correlacion'
+    )
+  )
+
+betas$CoeficientesParse =
+  factor(
+    betas$Coeficientes,
+    levels = c(
+      "(Intercept)",
+      "AsigTrat",
+      "I(AsigTrat^2)",
+      "as.factor(Zona)5.92958683214944",
+      "as.factor(Zona)5.42217668469038",
+      # "AsigTrat:as.factor(Zona)24.6",
+      "AsigTrat:as.factor(Zona)5.92958683214944",
+      "AsigTrat:as.factor(Zona)5.42217668469038"
+    ),
+    labels = c(
+      "beta[0]",
+      "beta[1]%*%N[i]",
+      "beta[2]%*%N[i]^2",
+      "beta[3]%*%Z[k]",
+      "beta[3]%*%Z[k]",
+      "beta[4]%*%Z[k]%*%N[i]",
+      # "beta[4]%*%Z[k]%*%N[i]",
+      "beta[4]%*%Z[k]%*%N[i]"
+    )
+  )
 
 
 betas_ss <-
@@ -249,55 +356,13 @@ betas_ss <-
     LS = Value + Std.Error * qnorm(0.975),
     cobertura = ValoresReales >= LI & ValoresReales <= LS
   ) %>%
-  filter(#!is.na(sesgo),
-    Modelo %in% c(modelos_zona, modelos_sin_zona)) %>%
-  mutate(
-    ModeloLab =
-      factor(
-        betas_ss$Modelo,
-        levels = c(
-          'M.DBCA.BlA.Co',
-          'M.DBCA.Zo.BlA.Co',
-          'M.DCA.Co',
-          'M.DCA.Zo.Co',
-          'M.FR.FrA.Co',
-          'M.FR.Zo.FrA.Co'
-        ),
-        labels = c(
-          'DBCA',
-          'DBCA + Zona',
-          'DCA',
-          'DCA + Zona',
-          'Franjas',
-          'Franjas + Zona'
-        )
-      ),
-    CoeficientesParse =
-      factor(
-        betas_ss$Coeficientes,
-        levels = c(
-          "(Intercept)",
-          "AsigTrat",
-          "I(AsigTrat^2)",
-          "as.factor(Zona)26.37",
-          "as.factor(Zona)22.05",
-          "AsigTrat:as.factor(Zona)24.6",
-          "AsigTrat:as.factor(Zona)26.37",
-          "AsigTrat:as.factor(Zona)22.05"
-        ),
-        labels = c(
-          "beta[0]",
-          "beta[1]%*%N[i]",
-          "beta[2]%*%N[i]^2",
-          "beta[3]%*%Z[k]",
-          "beta[3]%*%Z[k]",
-          "beta[4]%*%Z[k]%*%N[i]",
-          "beta[4]%*%Z[k]%*%N[i]",
-          "beta[4]%*%Z[k]%*%N[i]"
-        )
-      )
-  )
-
+   filter(#!is.na(sesgo),
+    Modelo %in% c(modelos_zona, modelos_sin_zona),
+    # Modelo %in% modelos_zona_Corr_NoCorr
+    # Modelo %in% modelos_sin_zona_Corr_NoCorr
+     !is.na(ModeloLab)
+   ) 
+  
 ## Sesgo ----
 sesgo_plot <-
   sapply(levels(betas_ss$CoeficientesParse), function(x) {
@@ -310,7 +375,7 @@ sesgo_plot <-
                    alpha = 0.1,
                    adjust = 3) +
       facet_grid(
-        CorrEsp ~ CoeficientesParse,
+        interaction(CorrEsp, Dosis0) ~ CoeficientesParse,
         # labeller = labeller(CorrEsp = c(baja = 'Alto RSV', media = 'Medio RSV')),
         labeller = labeller(CorrEsp = c(baja = 'Alto RSV', media = 'Medio RSV'),
                             CoeficientesParse = label_parsed)#,
@@ -335,6 +400,7 @@ sesgo_plot <-
     
     
   }, simplify = FALSE)
+
 sesgo_plot_arrange <-
   ggpubr::ggarrange(sesgo_plot[[1]],
                     sesgo_plot[[2]],
@@ -343,7 +409,7 @@ sesgo_plot_arrange <-
                     sesgo_plot[[5]],
                     # paramZonaInter,
                     common.legend = TRUE, 
-                    ncol = 5,
+                    ncol = 3,
                     legend = 'bottom')
 ggsave('images/sesgo_disenios.png',
        sesgo_plot_arrange,
@@ -372,7 +438,7 @@ coberturas <-
 
 TablaCobertura <-
   coberturas %>%
-  reshape2::dcast(ModeloLab + Dosis0 + TratMax ~ CoeficientesParse,
+  reshape2::dcast(ModeloLab + Dosis0 + TratMax + CorrEsp ~ CoeficientesParse,
                   value.var = 'cobertura_p',
                   fun.aggregate = mean) %>%
   mutate_if(specialround, 1, .predicate = 'is.numeric') 
@@ -387,7 +453,7 @@ write.table(
 )
 
 
-ggplot(coberturas, aes(x = ModeloLab, y = cobert)) +
+ggplot(coberturas, aes(x = ModeloLab, y = cobertura_p)) +
   geom_point() +
   facet_grid(
     interaction(CorrEsp, Dosis0) ~ interaction(CoeficientesParse, TratMax),
