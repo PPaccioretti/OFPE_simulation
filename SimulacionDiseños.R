@@ -1,38 +1,48 @@
-setwd("/home/ppaccioretti/SimulacionEnsayos/")
 library(RandomFields)
 library(MASS)
 library(nlme)
 library(automap)
-library(parallel)
-RFoptions(seed = NA)
-args <- commandArgs(TRUE)
 
-semilla <- 1990
-if (length(args) >= 1) {
-  semilla <- as.numeric(args[[1]])
-}
+# set.seed(1)
+# RFoptions(seed = seed, always_open_device=T, always_close_device=F)
 
-nsim <- 250
-if (length(args) >= 2) {
-  nsim <- as.numeric(args[[2]])
-}
+# #Dimensiones Campo
+# xcampo<- 1000 #metros
+# ycampo<- 1000 #metros
+# 
+# #Dimensiones Parcela
+# xlargoparcela<- 70 #metros
+# yanchoparcela<- 30 #metros
+# 
+# #Parámetros error correlacionado Exponencial
+# #Recopilación de 247 mapas de rendimiento de maíz: Rango 49metros, sill=var 7, nugget 1.2
+# rango <- 49 #Scale = Rango ~Gamma (41.3, 17.5)
+# sill <- 7 #Sill = Var de Exp
+# nugget <- 1.2 #varianza nugget ~ Weibull ()
+# MediaCultivo<- 58
+# #Número de zonas (Divide al eje X)
+# Nzonas <- 2
+# 
+# #HeterogeneidadEntreZonas (Heterog *(Sill+Nugget) )
+# Heterog <- 3
+# 
+# #Tratamientos
+# Trat <- c(1,40,70,100,140)
+# 
+# #Betas de regresion
+# mediaBeta1 <- 0.12
+# varBeta1<- 0.0001
+# mediaBeta2<- -0.0004
+# varBeta2<- 0.00000001
+# covBetas<- 0
 
-
-cat('Corriendo con semilla', semilla, '\n')
-cat('Corriendo', nsim, 'simulaciones\n')
-
-RNGkind("L'Ecuyer-CMRG")
-set.seed(semilla)
-
-
-GenerarCampoAjustarModelos <- function(
-  #Dimensiones Campo
+GenerarCampoAjustarModelos <- function(#Dimensiones Campo
   xcampo = 1000, #metros
   ycampo = 1000, #metros
   
   #Dimensiones Parcela
   xlargoparcela = 70, #metros
-  yanchoparcela = 33, #metros
+  yanchoparcela = 30, #metros
   
   # Parámetros error correlacionado Exponencial
   # Recopilación de 247 mapas de rendimiento de maíz: 
@@ -41,37 +51,31 @@ GenerarCampoAjustarModelos <- function(
   sill = 7, #Sill = Var de Exp
   nugget = 1.2, #varianza nugget ~Weibull()
   
-  MediaCultivo = 80,#qq#8,     
-  
+  MediaCultivo = 80,     
+
   #########
   #Número de zonas (Divide al eje X)
   Nzonas = 2,
   
   #HeterogeneidadEntreZonas (Heterog *(Sill+Nugget) )
-  Heterog = 2,
+  Heterog = 3,
   
   #Tratamientos
-  Trat = c(1, 40, 70, 100, 140),
+  Trat = c(0, 40, 70, 100, 140),
   
   #Betas de regresion
-  mediaBeta1 = 0.244,#qq #12.76/100,
-  varBeta1 = 0,#0.000001,#0.001,
-  mediaBeta2 = -0.0015,#qq #-0.001,
-  varBeta2 = 0,#0.0000001,
-  covBetas = 0,
-  TerInterZonError = 0.0034) {
-  if (Sys.info()['sysname'] == "Windows") {
-    browser()
-  }
-# 
+  mediaBeta1 = 0.12,
+  varBeta1 = 0.0001,
+  mediaBeta2 = -0.0004,
+  varBeta2 = 0.00000001,
+  covBetas = 0) {
+
   #Futuras coordenadas del campo
-  # x <- seq(0, xcampo, xcampo / xlargoparcela)
-  # y <- seq(0, ycampo, ycampo / yanchoparcela)
-  x <- seq(0, xcampo, xlargoparcela)
-  y <- seq(0, ycampo, yanchoparcela)
+  x <- seq(0, xcampo, xcampo / xlargoparcela)
+  y <- seq(0, ycampo, ycampo / yanchoparcela)
   #Fija una semilla para la simulación
   MiSemilla = round(runif(1, min = -99999, max = 99999), 0)
-
+  RFoptions(seed = MiSemilla)
   #Estima el modelo y Simula los datos
   modelo <-
     RMexp(var = sill, scale = rango) + 
@@ -87,7 +91,7 @@ GenerarCampoAjustarModelos <- function(
   EfZona <-
     findInterval(Simulacion$x, seq(0, xcampo, length = Nzonas + 1)[-c(1, Nzonas +
                                                                         1)],
-                 left.open = TRUE) * (Heterog * sqrt(sill + nugget))
+                 left.open = TRUE) * (Heterog * (sill + nugget))
   #   Cantidad de parcelas por zona: table(as.factor(EfZona))
   
   #Junta la simulacion con la zona
@@ -144,7 +148,7 @@ GenerarCampoAjustarModelos <- function(
   # Asigna un tratamiento a cada coordenada y.
   # Aleatoriza los tratamientos y todas las franjas tienen el mismo orden de Tratamiento
   # o aleatoriza todas las franjas sin restricción
-  if (AleatFranja) {
+  AsigTrat <- if (AleatFranja) {
     AleatTrat <-
       do.call(rbind,
               sapply(1:ceiling(length(unique(MisParcelasFR$y)) / length(Trat)),
@@ -159,10 +163,9 @@ GenerarCampoAjustarModelos <- function(
       Trat[AleatTrat$AsigTrat[1:length(unique(MisParcelasFR$y))]]
     AleatTrat <- AleatTrat[1:length(TratAsigFr), ]
     AleatTrat$AsigTrat <- TratAsigFr
-    AsigTrat <- AleatTrat
+    AleatTrat
   } else {
-    AsigTrat <- 
-      rep(Trat[sample(1:length(Trat))], length =
+    rep(Trat[sample(1:length(Trat))], length =
           length(unique(MisParcelasFR$y)))
   }
   #Junta las coordenadas y con el orden de los tratamientos
@@ -206,7 +209,7 @@ GenerarCampoAjustarModelos <- function(
         by = min(diff(unique(MisParcelasDBCA$y))) * length(Trat)
       ),
       left.open = FALSE,
-      rightmost.closed = FALSE
+      rightmost.closed = TRUE
     )
   #Genera los bloques individuales que es la combinación de la división anterior
   MisParcelasBloq <-
@@ -232,7 +235,7 @@ GenerarCampoAjustarModelos <- function(
       MisParcelasBloqComp,
       MisParcelasBloqComp$Bloque,
       FUN = function(x) {
-         data.frame(x, "AsigTrat" = Trat[sample(1:length(Trat))])
+        data.frame(x, "AsigTrat" = Trat[sample(1:length(Trat))])
       },
       simplify = FALSE
     )
@@ -245,7 +248,7 @@ GenerarCampoAjustarModelos <- function(
   MisParcelasBloqIncomp <-
     MisParcelasBloqIncomp[, !colnames(MisParcelasBloqIncomp) %in% c("FranjaX", "FranjaY")]
   #Los bloques incompletos no tienen tratamientos
-  try(MisParcelasBloqIncomp$AsigTrat <- NA, silent = TRUE)
+  try(MisParcelasBloqIncomp$AsigTrat <- NA)
   #Combina los bloques incompletos y completos en una sola tabla
   MisParcelasDBCATrat <-
     rbind(MisTratBloqueCompleto, MisParcelasBloqIncomp)
@@ -287,25 +290,23 @@ GenerarCampoAjustarModelos <- function(
   # misBetas<-mvrnorm(n = 100000, mu=c(mediaBeta1,mediaBeta2), Sigma=matrix(c(varBeta1,rep(covBetas,2),varBeta2),2), tol = 1e-6, empirical = FALSE, EISPACK = FALSE)
   # plot(misBetas)
   # abline(h=0)
-
+  TerInterZonError <- 0.0034
   EstRto <-
     function(df1,
-             miBeta11 = miBeta1,
-             miBeta22 = miBeta2,
-             InterZonError = TerInterZonError) {
+              miBeta11 = miBeta1,
+              miBeta22 = miBeta2,
+              TerInterZonError = 0.0034) {
       MiRto <- df1["AsigTrat"]
       names(MiRto) <- "MiRto"
       MiRto <-
-        miBeta11 * MiRto + miBeta22 * MiRto ^ 2 + InterZonError * MiRto * df1["Zona"] + df1["ErrorConEfecto"]                  ##############################
+        miBeta11 * MiRto + miBeta22 * MiRto ^ 2 + TerInterZonError * MiRto * df1["Zona"] + df1["ErrorConEfecto"]                  ##############################
       data.frame(df1, MiRto)
     }
   # write.table(MisParcelasFRTrat, paste0("clipboard-", 2^10), quote = FALSE, sep="\t", row.names = FALSE)
   MisParcelasFRTrat <- EstRto(MisParcelasFRTrat)
   MisParcelasDCATrat <- EstRto(MisParcelasDCATrat)
   MisParcelasDBCATrat <- EstRto(MisParcelasDBCATrat)
-  if (Sys.info()['sysname'] == "Windows") {
-    browser()
-  }
+  
   # plot(MisParcelasFRTrat$AsigTrat+1, t(MisParcelasFRTrat$MiRto), col='blue')
   # points(MisParcelasDCATrat$AsigTrat+2, t(MisParcelasDCATrat$MiRto), col='red')
   # points(MisParcelasDBCATrat$AsigTrat+3, t(MisParcelasDBCATrat$MiRto), col='darkgreen')
@@ -338,13 +339,13 @@ GenerarCampoAjustarModelos <- function(
   ### ANAVA NULO CON ERRORES
   #ANOVA CON EFECTO ALEATORIO FRANJA
   M.FR.Nulo.FrA <- lme(as.formula(Formula.Nulo)
-                       ,random = list(FranjaRep = pdIdent(~1))                  ##############################                   ##############################                   ############################## 
-                       ,method = "REML"
-                       ,control = lmeControl(niterEM = 150
-                                             ,msMaxIter = 200)
-                       ,na.action = na.omit
-                       ,data = MisParcelasFRTrat
-                       ,keep.data = FALSE)
+                     ,random = list(FranjaRep = pdIdent(~1))                  ##############################                   ##############################                   ############################## 
+                     ,method = "REML"
+                     ,control = lmeControl(niterEM = 150
+                                         ,msMaxIter = 200)
+                     ,na.action = na.omit
+                     ,data = MisParcelasFRTrat
+                     ,keep.data = FALSE)
   setTxtProgressBar(pb, 1)
   #ANOVA CON EFECTO ALEATORIO FRANJA
   M.FR.Nulo.Zo.FrA <-lme(as.formula(Formula.Nulo.Zo)
@@ -614,10 +615,6 @@ GenerarCampoAjustarModelos <- function(
       TablaAnava <- summary(Modelo)$tTable
       colnames(TablaAnava) <-
         c("Value", "Std.Error", "t-value", "p-value")
-
-      intervalos <- confint(Modelo)
-      colnames(intervalos) <- c('lower', 'upper')
-      
       Betas <- data.frame(
         "Modelo" = deparse(substitute(Modelo)),
         "Coeficientes" = rownames(summary(Modelo)$tTable),
@@ -625,20 +622,16 @@ GenerarCampoAjustarModelos <- function(
         "DF" = NA,
         row.names = NULL
       )[, c(1:4, 7, 5:6)]
-      Betas <- data.frame(Betas, intervalos)
     }
     
     if (class(Modelo) == "lme") {
       TablaAnava <- summary(Modelo)$tTable
       colnames(TablaAnava) <-
         c("Value", "Std.Error", "DF", "t-value", "p-value")
-      intervalos <- intervals(Modelo, which = "fixed")
-      intervalos <- intervalos$fixed[, c(1,3)]
       Betas <- data.frame(
         "Modelo" = deparse(substitute(Modelo)),
         "Coeficientes" = rownames(summary(Modelo)$tTable),
         TablaAnava,
-        intervalos,
         row.names = NULL
       )
     }
@@ -646,10 +639,6 @@ GenerarCampoAjustarModelos <- function(
       TablaAnava <- summary(Modelo)$coefficients
       colnames(TablaAnava) <-
         c("Value", "Std.Error", "t-value", "p-value")
-      
-      intervalos <- confint(Modelo)
-      colnames(intervalos) <- c('lower', 'upper')
-      
       Betas <- data.frame(
         "Modelo" = deparse(substitute(Modelo)),
         "Coeficientes" = rownames(summary(Modelo)$coefficients),
@@ -657,16 +646,11 @@ GenerarCampoAjustarModelos <- function(
         "DF" = NA,
         row.names = NULL
       )[, c(1:4, 7, 5:6)]
-      Betas <- data.frame(Betas, intervalos)
-      
     }
     return(list("Resumen" = ModelResumen, "Betas" = Betas))
   }
   
-  media_disenio <- function(misParcelas) {
-    mean(misParcelas$MiRto, na.rm = T)
-  }
-
+  
   ResumenModelos <-
     sapply(ls(pattern = "M[.]"), function(Es) {
       eval(parse(text = paste0("ResumirModelo(", Es, ")")))
@@ -680,29 +664,6 @@ GenerarCampoAjustarModelos <- function(
   ResumenResult$RangoReal <- NA
   ResumenResult[!is.na(ResumenResult$rango), "RangoReal"] <-
     ModeloVariograma$Range
-  
-  # Calculo el CV teniendo en cuenta el Sigma del modelo y la media dela
-  # base de datos de cada disenio
-  media_disenio <- function(misParcelas) {
-    mean(misParcelas$MiRto, na.rm = T)
-  }
-  
-  sigma_cv <- function(diesnio, misParcelas) {
-    misDis <- grepl(diesnio, ResumenResult$Modelo)
-    misSigmas <- ResumenResult$SigmaError[misDis]
-    misModelos <- ResumenResult$Modelo[misDis]
-    misSigmas_cv <- misSigmas / media_disenio(misParcelas) * 100
-    data.frame('Modelo' = misModelos,
-               'Sigma_CV' = misSigmas_cv)
-  }
-  misSigma_cv <- rbind(
-    sigma_cv('M[.]DBCA[.]*', MisParcelasDBCATrat),
-    sigma_cv('M[.]DCA[.]*', MisParcelasDCATrat),
-    sigma_cv('M[.]FR[.]*', MisParcelasFRTrat)
-  )
-
-  ResumenResult <- merge(ResumenResult, misSigma_cv, all.x = T)
-  
   setTxtProgressBar(pb, 25)
   
   #Betas Estimados
@@ -712,27 +673,16 @@ GenerarCampoAjustarModelos <- function(
     }))  ### INTENTAR SACARLO DE LA LISTA
   BetasEst$Orden <- 1:nrow(BetasEst)
   #Betas Reales
-  misNombresCoef <- unique(BetasEst$Coeficientes)
-  
-  efectZona <- 
-    misNombresCoef[grep("^as.factor(Zona)*", misNombresCoef)]
-  
-  interaccTratZona <-
-    misNombresCoef[grep("AsigTrat:as.factor(Zona)*", misNombresCoef)]
-  
   BetasReales <- data.frame(
-    "Coeficientes" = c("AsigTrat", "I(AsigTrat^2)", efectZona, interaccTratZona),
-    "ValoresReales" = c(miBeta1, miBeta2, max(EfZona), TerInterZonError * unique(Simulacion$Zona)[2])
+    "Coeficientes" = c("AsigTrat", "I(AsigTrat^2)", "AsigTrat:as.factor(Zona)24.6"),
+    "ValoresReales" = c(miBeta1, miBeta2, TerInterZonError * unique(Simulacion$Zona)[2])
   )
   BetasEstReal <- merge(BetasReales, BetasEst, all.y = T, sort = FALSE)
-  # Es -1 para que saque la columna Orden
   BetasEstReal <-
     BetasEstReal[order(BetasEstReal$Orden), c(3, 1, 4, 2, 5:(ncol(BetasEstReal) -
-                                                               1))] 
+                                                               1))] # Es -1 para que saque la columna Orden
   setTxtProgressBar(pb, 26)
-  close(pb)
-  cat('\n')
-
+  # close(pb)
   return(list(
     "Resumen" = ResumenResult,
     "BetasEstReal" = BetasEstReal,
@@ -741,6 +691,8 @@ GenerarCampoAjustarModelos <- function(
   
 }
 
+
+set.seed(1)
 
 # ## "<0.25"
 # Rango	47.11
@@ -753,21 +705,18 @@ GenerarCampoAjustarModelos <- function(
 # Nugget	2.54
 
 
-# set.seed(1)
-
-simulaciones <- mclapply(1:nsim, function(i) {
-  RFoptions(storing = FALSE)
+sapply(1:1, function(i) {
   # Con 0 en los trat
   ## Alta variacion Tratamientos
   ### baja correlacion espacial "<0.25"
   Test_AltaVarT_BajaCorr <-
-    GenerarCampoAjustarModelos(Trat = c(1, 70, 140, 210, 280),
+    GenerarCampoAjustarModelos(Trat = c(0, 70, 140, 210, 280),
                                rango = 47.11,
                                sill = 7.85,
                                nugget = 0.94)
   ### media correlacion espacial "0.25-0.75"
   Test_AltaVarT_MediaCorr <-
-    GenerarCampoAjustarModelos(Trat = c(1, 70, 140, 210, 280),
+    GenerarCampoAjustarModelos(Trat = c(0, 70, 140, 210, 280),
                                rango = 56.82,
                                sill = 4.81,
                                nugget = 2.54)
@@ -775,13 +724,13 @@ simulaciones <- mclapply(1:nsim, function(i) {
   ## Baja variacion Tratamientos
   ### baja correlacion espacial "<0.25"
   Test_BajaVarT_BajaCorr <- 
-    GenerarCampoAjustarModelos(Trat = c(1, 40, 70, 100, 140),
+    GenerarCampoAjustarModelos(Trat = c(0, 40, 70, 100, 140),
                                rango = 47.11,
                                sill = 7.85,
                                nugget = 0.94)
   ### media correlacion espacial "0.25-0.75"
   Test_BajaVarT_MediaCorr <- 
-    GenerarCampoAjustarModelos(Trat = c(1, 40, 70, 100, 140),
+    GenerarCampoAjustarModelos(Trat = c(0, 40, 70, 100, 140),
                                rango = 56.82,
                                sill = 4.81,
                                nugget = 2.54)
@@ -814,7 +763,7 @@ simulaciones <- mclapply(1:nsim, function(i) {
                                rango = 56.82,
                                sill = 4.81,
                                nugget = 2.54)
-
+  
   
   info_Test_AltaVarT_BajaCorr <- data.frame(
     'Simulacion' = i,
@@ -986,14 +935,93 @@ simulaciones <- mclapply(1:nsim, function(i) {
     'BetasEstReal' = betas,
     'Semilla' = semilla)
   
-}, mc.cores = detectCores() - 1)
+})
 
-#saveRDS(simulaciones, "Simulaciones_500_Nov_2020.rds")
-saveRDS(simulaciones, 
-        paste0("Simulaciones_",
-               "Sem_", semilla,
-               "_",
-               "nsim_",
-               nsim,
-               "_",
-               format(Sys.time(), "%Y_%d_%m_%H-%M-%S"), ".rds"))
+
+
+
+
+Ad <- sapply(1:1, function(i) {
+  print(paste("Simulacion", i , "de", 1000))
+  GenerarCampoAjustarModelos(Trat = c(0, 70, 140, 210, 280))
+})
+
+
+
+# plot(A$Modelo,A$SigmaError, las=3)
+# abline(h=0)
+# plot(as.numeric(as.character(A$rango)),A$SigmaError)
+# 
+# plot(as.numeric(as.character(Result$rango)), Result$SigmaError)
+# 
+# 
+# 
+# 
+# 
+
+
+
+
+
+
+
+
+
+# 
+# max(Dis)
+# 
+# var(Simulacion$variable1)
+# RFcalc(modelo)
+# 
+# 
+# plot(Simulacion$x, Simulacion$y, col= findInterval(Simulacion$x, seq(0,xcampo, length=Nzonas+1)[-c(1,Nzonas+1)],  left.open = TRUE)+1)
+# # abline(v=DivideZona, col='red')
+# # abline(v=c(1000/3, 1000/3 + 1000/3), col='blue')
+# # abline(v=c(1000/4, 1000/4 + 1000/4, 1000/4 + 1000/4+ 1000/4), col='darkgreen')
+# 
+# dev.new()
+# abline(a=0, b=1)
+# image(Simulacion)
+# 
+# 
+# 
+# aggregate(ErrorConEfecto ~ Zona, data=Simulacion, mean)
+# 
+# 
+# 
+# 
+# 
+# 
+# 
+# color.gradient <- function(x, colors=c("red","yellow","darkgreen"), colsteps=100) {
+#   return( colorRampPalette(colors) (colsteps) [ findInterval(x, seq(min(x),max(x), length.out=colsteps)) ] )
+# }
+# dev.new()
+# plot(Simulacion[,1:2], col= color.gradient(Simulacion$ErrorConEfecto), pch=20, cex=2)
+# dev.new()
+# plot(Simulacion[,1:2], col= color.gradient(Simulacion$variable1), pch=20, cex=2)
+# 
+# 
+# 
+# 
+# 
+# z <- RFsimulate(RMexp(), x, spConform=FALSE)
+# simu2 <- conventional2RFspDataFrame(simu, coord=expand.grid(x,y))
+# Print(simu,simu2)
+# 
+# 
+# 
+# 
+# valorError<-as.data.frame(simu)
+# class(valorError[,1])
+# color.gradient(as.data.frame(simu)[,1])
+# # dev.new()
+# # heat.colors()
+# # topo.colors(data.frame(simu))
+# 
+# plot(simu)
+# Simulacion <- data.frame(simu)
+# as.data.frame(simu)
+# 
+# str(simu)
+# 

@@ -21,10 +21,6 @@ modelos_sin_zona_Corr_NoCorr <-
     "M.DBCA.BlA", "M.DCA", "M.FR.FrA")
 
 # Lectura datos ----
-# patronResultados <- '_2020_(10)_12_*'
-# patronResultados <- '_2020_(15)_12_*'
-# patronResultados <- '(_2020_(17)_12_(19|20))'
-# patronResultados <- '(_2020_(18)_12_)'
 patronResultados <- '(_2021_(15)_01_)'
 misRDS <-
   list.files('resultados/', pattern = patronResultados, full.names = TRUE)
@@ -40,6 +36,7 @@ betas <- selecciona(misObjetos, 'BetasEstReal')
 semillas <- selecciona(misObjetos, 'semillas')
 
 
+
 sigmaalto <- resumen[resumen$Sigma_CV > 15, c('Corrida', 'Simulacion')]
 cat("Hay", nrow(sigmaalto), "datos raros\n")
 if (nrow(sigmaalto) > 0) {
@@ -53,9 +50,6 @@ if (nrow(sigmaalto) > 0) {
   semillas <- semillas[ !(semillas$Corrida %in% sigmaalto$Corrida & 
                             semillas$Simulacion %in% sigmaalto$Simulacion), ]
 }
-
-
-
 
 misZonas <- gsub('(as\\.factor)|([aA-zZ]+)|(\\(.*\\)|:|)',
                  '',
@@ -96,10 +90,6 @@ betas$CoeficientesParse <-
   )
 
 
-# table(sigmaalto$Modelo)
-# resumen <- resumen[resumen$Corrida != 50 & resumen$Simulacion != 44, ]
-# betas <- betas[betas$Corrida != 50 & betas$Simulacion != 44, ]
-
 misModelosConCorr <- grepl('[.]Co$', resumen$Modelo)
 resumen$ConCorr <- misModelosConCorr
 
@@ -111,39 +101,12 @@ resumen$Disenio[grepl('M[.]FR[.]*', resumen$Modelo)] <- 'Franjas'
 ## Sin contemplar efecto zona ----
 
 resumen_modelos_sin_zona <- resumen %>%
-  filter(Modelo %in% modelos_sin_zona,
-         CorrEsp == 'baja')
-
-ecdf_error_SinZona <- 
-  ggplot_ecdf(resumen_modelos_sin_zona) +
-  facet_grid(Dosis0 ~ TratMax,
-             labeller = label_dosisTrat) 
-
-ggsave('images/ecdf_error_SinZona.png',
-       ecdf_error_SinZona,
-       width = 15,
-       height = 10,
-       units = "cm")
-
+  filter(Modelo %in% modelos_sin_zona)
 
 ## Contemplando efecto zona ----
 
 resumen_modelos_zona <- resumen %>%
-  filter(Modelo %in% modelos_zona,
-         CorrEsp == 'baja')
-
-ecdf_error_Zona <-
-  ggplot_ecdf(resumen_modelos_zona) +
-  facet_grid(Dosis0 ~ TratMax,
-             labeller = label_dosisTrat)
-
-ggsave('images/ecdf_error_Zona.png',
-       ecdf_error_Zona,
-       width = 15,
-       height = 10,
-       units = "cm")
-
-
+  filter(Modelo %in% modelos_zona)
 
 # Sigma medio con-sin correlacion espacial ----
 # Media del sigma del error para los disenios particionado por 
@@ -152,9 +115,7 @@ ggsave('images/ecdf_error_Zona.png',
 
 
 resumen_modelos_zona_Corr_NoCorr <- resumen %>%
-  filter(Modelo %in% modelos_zona_Corr_NoCorr,
-         CorrEsp == 'baja')
-# datos <- resumen_modelos_zona_Corr_NoCorr
+  filter(Modelo %in% modelos_zona_Corr_NoCorr)
 
 descriptiva_modelos_zona_Corr_NoCorr <-
   resumen_modelos_zona_Corr_NoCorr %>%
@@ -166,47 +127,29 @@ descriptiva_modelos_zona_Corr_NoCorr <-
     p975 = quantile(Sigma_CV, 0.975)
   )
 
-descriptiva_corrEsp <-
-  ggplot(descriptiva_modelos_zona_Corr_NoCorr,
-         aes(x = Disenio, color = ConCorr)) +
-  # geom_errorbar(aes(ymin = media - ee,
-  #                   ymax = media + ee),
-  #               width = 0.09) +
-  geom_errorbar(aes(ymin = p025,
-                    ymax = p975),
-                width = 0.09) +
-  geom_point(aes(y = media)) +
-  scale_colour_manual(
-    name = "Errores",
-    values = c('FALSE' = '#8dd3c7', 'TRUE' = '#fb8072'),
-    # values = c('FALSE' = '#4D4D4D', 'TRUE' = '#E6E6E6'),
-    labels = c('FALSE' = 'Independientes', 'TRUE' = 'Correlacionados')
-  ) +
-  labs(x = 'Diseño experimental',
-       y = 'Error Estandar residual') +
-  theme_minimal() +
-  theme(
-    # legend.position = "none",
-    text = element_text(size = 30 / ggplot2:::.pt),
-    legend.justification = c(1, 0),
-    legend.position = c(1, 0.4),
-    legend.key.size = unit(2 / ggplot2:::.pt, 'lines'),
-    axis.text.x = element_text(colour = "black"),
-    axis.text.y = element_text(colour = "black")
-  ) +
-  facet_grid(CorrEsp ~ .,
-             labeller =  labeller(CorrEsp = c(baja = 'Alto RSV',
-                                              media = 'Medio RSV')))
+# Sesgo y Cobertura ----
+tablaSigma <-
+  resumen %>%
+  filter(Modelo %in% c(modelos_zona, modelos_sin_zona),
+         !is.na(ModeloLab),
+         CorrEsp == 'baja') %>%
+  group_by(ModeloLab, Dosis0, TratMax, CorrEsp) %>%
+  summarise(
+    Sigma_CV_media = mean(Sigma_CV),
+    Sigma_CV_sd = sd(Sigma_CV),
+    Sigma_CV_cv = (Sigma_CV_sd/Sigma_CV_media) * 100,
+  )  %>%
+  mutate_if(specialround, 1, .predicate = 'is.numeric')
 
-ggsave(
-  'images/descriptiva_corrEsp.png',
-  descriptiva_corrEsp,
-  width = 15,
-  height = 8,
-  units = "cm"
+write.table(
+  tablaSigma,
+  'clipboard',
+  sep = '\t',
+  quote = FALSE,
+  na = '--',
+  row.names = FALSE
 )
 
-# Sesgo y Cobertura ----
 
 
 betas_ss <-
@@ -214,34 +157,104 @@ betas_ss <-
   mutate(
     sesgo = Value - ValoresReales,
     sesgo_prop = (Value - ValoresReales) / ValoresReales,
-    LI = Value + Std.Error * qnorm(0.025),
-    LS = Value + Std.Error * qnorm(0.975),
-    cobertura = ValoresReales >= lower & ValoresReales <= upper,
-    zona = grepl('Zona', ModeloLab)
+    cobertura = ValoresReales >= lower & ValoresReales <= upper
   ) %>%
-   filter(#!is.na(sesgo),
+  filter(
     Modelo %in% c(modelos_zona, modelos_sin_zona),
-    # Modelo %in% modelos_zona_Corr_NoCorr
-    # Modelo %in% modelos_sin_zona_Corr_NoCorr
-     !is.na(ModeloLab),
+    !is.na(ModeloLab),
     CorrEsp == 'baja'
-   ) 
-  
-## Sesgo ----
-# Graficos densidad betas
-guardarPlots <- TRUE
-# source('02_a_plotDensidadBetas.R', encoding = 'utf8')
-
-## Cual disenioo elegir
-## La importancia de contemplar la zona dado que existe un efecto de zona
-## El impacto de considerar la estructura espacial
+  ) 
 
 ## Cobertura  ----
 
 coberturas <-
   betas_ss %>%
   group_by(ModeloLab, Dosis0, TratMax, CorrEsp, CoeficientesParse) %>%
-  summarise(cobertura_p = mean(cobertura)*100)
+  summarise(
+    sesgo_prom = mean(sesgo_prop),
+    sesgo_sd = sd(sesgo_prop),
+    sesgo_amplitud = diff(range(sesgo_prop)),
+    cobertura_p = mean(cobertura)*100)
+
+
+
+tablaSesgo_export <-
+  tidyr::pivot_wider(
+    coberturas,
+    id_cols = c(ModeloLab, Dosis0, TratMax, CorrEsp),
+    names_from = CoeficientesParse,
+    values_from = c('sesgo_prom', 'sesgo_sd', 'sesgo_amplitud'),
+    # values_fn = mean,
+    # names_glue = '{sesgo_prom}_{sesgo_sd}'
+    values_fn = mean
+  ) %>%
+    mutate_if(
+      formatC,
+      # 1,
+      .predicate = 'is.numeric',
+      # nsmall = 2,
+      format = "e",
+      digits = 2
+      # scientific = -1
+      # small.interval = 7
+      # width = 4
+      # justify = 'left'
+      # format = 'fg',
+      # flag = ' ',
+      # width = 5
+      # preserve.width = 'none',
+      # replace.zero = TRUE,
+      # drop0trailing = TRUE
+    )
+    
+
+  # mutate_if(
+  #   format,
+  #   # 1,
+  #   .predicate = 'is.numeric',
+  #   # nsmall = 2,
+  #   digits = 2,
+  #   scientific = -1
+  #   # small.interval = 7
+  #   # width = 4
+  #   # justify = 'left'
+  #   # format = 'fg',
+  #   # flag = ' ',
+  #   # width = 5
+  #   # preserve.width = 'none',
+  #   # replace.zero = TRUE,
+  #   # drop0trailing = TRUE
+  # )
+  # mutate_if(
+  #   prettyNum,
+  #   1,
+  #   .predicate = 'is.numeric',
+  #   digits = 3,
+  #   format = 'fg',
+  #   # flag = ' ',
+  #   width = 5
+  #   # preserve.width = 'none',
+  #   # replace.zero = TRUE,
+  #   # drop0trailing = TRUE
+  # )
+
+write.table(
+  tablaSesgo_export,
+  'clipboard',
+  sep = '\t',
+  quote = FALSE,
+  na = '--',
+  row.names = FALSE
+)
+
+
+TablaCobertura <-
+  coberturas %>%
+  reshape2::dcast(ModeloLab + Dosis0 + TratMax + CorrEsp ~ CoeficientesParse,
+                  value.var = c('cobertura_p','sesgo_prom'),
+                  fun.aggregate = mean) %>%
+  rowwise() %>% 
+  mutate(media = mediaSinNaN(c_across(starts_with("beta")))) 
 
 TablaCobertura <-
   coberturas %>%
@@ -256,28 +269,9 @@ TablaCobertura_format <-
   TablaCobertura %>% 
   mutate_if(specialround, 1, .predicate = 'is.numeric')
 
-write.table(
-  TablaCobertura_format,
-  'clipboard',
-  sep = '\t',
-  quote = FALSE,
-  na = '--',
-  row.names = FALSE
-)
 
 
-ggplot(coberturas, aes(x = ModeloLab, y = cobertura_p)) +
-  geom_point() +
-  facet_grid(
-    interaction(CorrEsp, Dosis0) ~ interaction(CoeficientesParse, TratMax),
-    labeller =  labeller(CorrEsp = c(baja = 'Alto RSV',
-                                     media = 'Medio RSV')),
-    scales = "fixed"
-  ) +
-  geom_hline(yintercept = 95, color = 'red') +
-  theme(axis.text.x = element_text(angle = -90))
+x <- c(0.00004, 0.000000004)
 
-mean(betas_ss$cobertura)
-range(betas_ss$Std.Error)
-mean(betas_ss$p.value > 0.05)
-
+format(round(x, digits = 90), nsmall = 2)
+sprintf("%2.7f ", x)

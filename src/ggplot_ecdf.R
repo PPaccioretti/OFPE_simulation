@@ -5,8 +5,8 @@ label_dosisTrat <-
                                    'No' = 'Sin testigo'),
                                  label_value),
            TratMax = as_labeller(
-             c('140' = 'Dosis~máxima~140~Kg~N~ha^-1',
-               '280' = 'Dosis~máxima~280~Kg~N~ha^-1'),
+             c('140' = 'Dosis~máxima~140~kg~N~ha^-1',
+               '280' = 'Dosis~máxima~280~kg~N~ha^-1'),
              label_parsed
            ))
 
@@ -34,7 +34,7 @@ ggplot_ecdf <- function(datos) {
   
   ggplot(datos, aes(x = Sigma_CV)) +
     stat_ecdf(
-      aes(colour = Modelo, linetype = CorrEsp),
+      aes(colour = Modelo),#, linetype = CorrEsp),
       pad = FALSE,
       show.legend = NA,
       lwd = 1.1
